@@ -1,7 +1,14 @@
 # Lost and Found Reports API
 
-A REST API for creating and managing lost and found item reports. It is built
-with Express 5, TypeScript, Zod, and PostgreSQL.
+A REST API for registering users, logging in, and managing lost and found item reports. The project is built with Express 5, TypeScript, Zod, PostgreSQL, and JWT-based authentication.
+
+## Features
+
+- User registration and login
+- Protected report routes with bearer-token authentication
+- CRUD operations for lost and found reports
+- Search by item name and paginated listing
+- Validation using Zod schemas
 
 ## Requirements
 
@@ -11,7 +18,7 @@ with Express 5, TypeScript, Zod, and PostgreSQL.
 
 ## Getting started
 
-1. Clone the repository and install its dependencies:
+1. Clone the repository and install dependencies:
 
    ```bash
    git clone https://github.com/ayomidebello604-a11y/lostandfoundreports-api.git
@@ -19,8 +26,7 @@ with Express 5, TypeScript, Zod, and PostgreSQL.
    npm install
    ```
 
-2. Create a `.env` file in the project root with your PostgreSQL connection
-   settings:
+2. Create a `.env` file in the project root with your PostgreSQL and JWT settings:
 
    ```dotenv
    DB_HOST=localhost
@@ -28,15 +34,21 @@ with Express 5, TypeScript, Zod, and PostgreSQL.
    DB_USER=postgres
    DB_PASSWORD=your_password
    DB_NAME=lostandfound
+   JWT_SECRET=your_super_secret_key
    ```
 
    Keep this file private; `.env` is excluded from version control.
 
-3. Create the database and the table used by the API. The project does not
-   include database migrations. For a fresh PostgreSQL database, the following
-   table is compatible with the repository queries:
+3. Create the required PostgreSQL tables for the app.
 
    ```sql
+   CREATE TABLE users (
+     id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+     name VARCHAR(30) NOT NULL,
+     email VARCHAR(255) NOT NULL UNIQUE,
+     password_hash TEXT NOT NULL
+   );
+
    CREATE TABLE lost_found_reports (
      id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
      student_id VARCHAR(20) NOT NULL,
@@ -59,17 +71,56 @@ with Express 5, TypeScript, Zod, and PostgreSQL.
 
    The API listens on `http://localhost:3000`.
 
-To compile the TypeScript and run the compiled server:
+5. To build and run the production server:
 
-```bash
-npm run build
-npm start
+   ```bash
+   npm run build
+   npm start
+   ```
+
+## Authentication
+
+The project exposes user authentication endpoints under `/api/user`.
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `POST` | `/api/user/register` | Register a new user |
+| `POST` | `/api/user/login` | Log in and receive a JWT |
+| `GET` | `/api/user` | View all users (requires a valid token) |
+
+### Register a user
+
+`POST /api/user/register`
+
+```json
+{
+  "name": "Jane Doe",
+  "email": "jane@example.com",
+  "password": "strongPassword123"
+}
 ```
 
-## API
+### Log in
 
-All report routes are prefixed with `/api/reports`. JSON request bodies should
-use `Content-Type: application/json`.
+`POST /api/user/login`
+
+```json
+{
+  "email": "jane@example.com",
+  "password": "strongPassword123"
+}
+```
+
+A successful login returns a user object and a JWT in the `Token` field.
+Use the token in the `Authorization` header for protected routes:
+
+```http
+Authorization: Bearer <token>
+```
+
+## Reports API
+
+All report routes are prefixed with `/api/reports` and require a valid bearer token.
 
 | Method | Path | Description |
 | --- | --- | --- |
@@ -85,7 +136,7 @@ use `Content-Type: application/json`.
 
 ### Create a report
 
-`POST /api/reports` accepts these fields:
+`POST /api/reports`
 
 ```json
 {
@@ -99,11 +150,16 @@ use `Content-Type: application/json`.
 }
 ```
 
-`student_id` is limited to 20 characters, `item_name` to 150, `category` to 50,
-`location` to 150, and `contact_details` to 150. These string fields must be
-non-empty after trimming; `description` has no configured maximum length.
-`type` must be `lost` or `found`. `contact_details` may be omitted or `null`.
-The database supplies `id` and the default `status` (`open`).
+Field rules:
+
+- `student_id`: max 20 characters
+- `item_name`: max 150 characters
+- `category`: max 50 characters
+- `location`: max 150 characters
+- `contact_details`: optional, max 150 characters
+- `description`: required text, no maximum length configured
+- `type`: must be `lost` or `found`
+- `status`: defaults to `open` when omitted
 
 ### Search and pagination
 
@@ -113,28 +169,31 @@ Search with a non-empty `searchName` query parameter:
 GET /api/reports/search?searchName=backpack
 ```
 
-Pagination requires both `page` and `limit`. `page` must be at least `1`, and
-`limit` must be between `1` and `100`:
+Pagination requires both `page` and `limit`:
 
 ```http
 GET /api/reports/paginated?page=1&limit=10
 ```
 
-The paginated response contains `Message`, `page`, `totalPages`, `Limit`,
-`TotalReport`, and `Reports` fields.
+Rules:
+
+- `page` must be at least `1`
+- `limit` must be between `1` and `100`
+- the paginated response includes `Message`, `page`, `totalPages`, `Limit`, `TotalReport`, and `Reports`
 
 ### Updating and deleting
 
-`PUT /api/reports/:id` takes the report fields (`student_id`, `item_name`,
-`description`, `type`, `category`, `location`, and optionally
-`contact_details`) and returns the updated report. `DELETE /api/reports/:id`
-returns the deleted report. IDs must be positive integers.
+`PUT /api/reports/:id` accepts report fields such as `student_id`, `item_name`, `description`, `type`, `category`, `location`, and optionally `contact_details`.
 
-## Responses and errors
+`DELETE /api/reports/:id` removes the report and returns the deleted record.
 
-Successful reads return JSON report objects or arrays. Creating a report
-returns `201 Created`; other successful operations return `200 OK`.
-Application errors use a JSON object with a `message` field. Invalid JSON and
-invalid report creation or pagination input return `400 Bad Request`; missing
-reports return `404 Not Found`; unexpected errors return `500 Internal Server
-Error`. Unmatched routes return `404` with `message` and `requestedURL`.
+## Error handling
+
+The API responds with JSON `message` fields for errors. Common responses include:
+
+- `400 Bad Request`: invalid JSON or invalid request payloads
+- `401 Unauthorized`: missing or invalid JWT
+- `404 Not Found`: missing report or route
+- `500 Internal Server Error`: unexpected server error
+
+Unmatched routes return a JSON response with `message` and `requestedURL`.
