@@ -11,8 +11,11 @@ import {
   getReportsBySearchName,
   getPaginatedReports,
 } from "../controllers/lostfound.controller.ts";
+import { verifyUserToken } from "../middleware/auth.validation.ts";
 
 const router = Router();
+
+router.use(verifyUserToken)
 
 // Create a report
 router.post("/",validateReportInput, createReport);

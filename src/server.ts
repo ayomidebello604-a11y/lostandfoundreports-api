@@ -1,10 +1,12 @@
 import express, { type Express, type Request, type Response, type ErrorRequestHandler } from "express";
 import lostfoundRouter from "./routes/lostfound.routes.ts"
+import userRouter from "./routes/auth.routes.ts"
 import { AppError } from "./errors/AppError.ts";
 
 const app: Express = express();
 app.use(express.json());
 app.use("/api/reports", lostfoundRouter)
+app.use("/api/user",userRouter)
 
 
 app.use((req: Request, res: Response) => {

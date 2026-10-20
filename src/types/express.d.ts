@@ -1,4 +1,5 @@
-import type { newReportInput,newMovieInput,newTicketIdInput, queryType } from "../zodtest.ts";
+import type { LoginInput, RegisterInput } from "../schema/auth.schema.ts";
+import type { newReportInput,newMovieInput,newTicketIdInput, queryType } from "../schema/lostandfound.schema.ts";
 
 
 declare global {
@@ -34,4 +35,25 @@ declare global {
         validatedQuery?: queryType
       }
     }
+}
+declare global {
+  namespace Express {
+    interface Request {
+        validatedLoginBody?: LoginInput
+      }
+    }
+}
+declare global {
+  namespace Express {
+    interface Request {
+      validatedRegisterBody?: RegisterInput
+    }
   }
+}
+declare global {
+  namespace Express {
+    interface Request {
+    userId: string
+    }
+  }
+}

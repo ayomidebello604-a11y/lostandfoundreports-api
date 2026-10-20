@@ -1,8 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import * as z from "zod"
-import { Report , PaginationQuery} from "../zodtest.ts";
+import { Report , PaginationQuery} from "../schema/lostandfound.schema.ts";
 import { AppError } from "../errors/AppError.ts";
-import type { RequestWithValidatedBody,RequestWithValidatedQuery } from "../types/lostfoundvalidation.types.ts";
 
 
 
@@ -12,7 +11,7 @@ export const validateReportInput = (req: Request, res: Response, next: NextFunct
         const prettifiedError = z.prettifyError(newReport.error)
         return next(new AppError(prettifiedError,400))
 } else {
-        (req as RequestWithValidatedBody).validatedBody  = newReport.data
+        req.validatedBody  = newReport.data
         next()
     }
 }
@@ -23,7 +22,7 @@ export const validatePaginationQuery = (req: Request, res: Response, next: NextF
         const prettifiedError = z.prettifyError(validatedQuery.error)
         return next(new AppError(prettifiedError,400))
     } else {
-        (req as RequestWithValidatedQuery).validatedQuery = validatedQuery.data
+        req.validatedQuery = validatedQuery.data
         next()
     }
 }
