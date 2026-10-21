@@ -21,7 +21,7 @@ export const createReport = async (
     if (!req.validatedBody) {
        throw new AppError("Validated request body is missing", 400);
     }
-    const newReport = await createReportService(req .validatedBody);
+    const newReport = await createReportService(req.userId,req .validatedBody);
     res.status(201).json(newReport);
   } catch (error) { 
     next(error);
@@ -62,7 +62,7 @@ export const updateReport = async (
 ) => {
   try {
     const id = Number(req.params.id);
-    const updatedReport = await updateReportService(req.body, id);
+    const updatedReport = await updateReportService(req.body, id,req.userId);
     res.status(200).json(updatedReport);
   } catch (error) {
     next(error);
@@ -78,7 +78,7 @@ export const deleteReport = async (
        if (!Number.isInteger(id) || id < 1) {
          throw new AppError("Invalid report ID", 400);
        }
-        const deletedReport = await deleteReportService(id);
+        const deletedReport = await deleteReportService(id,req.userId,req.userRole);
     res.status(200).json(deletedReport);
   } catch (error) {
     next(error);

@@ -4,7 +4,11 @@ import { jwtVerify } from "jose";
 import { generateToken } from "../utils/jwt.ts";
 import { LoginSchema, RegisterSchema } from "../schema/auth.schema.ts";
 import { AppError } from "../errors/AppError.ts";
+ 
+export  type UserRole = "student" | "admin"
 
+const isUserRole = (role: unknown): role is UserRole =>
+  role === "student" || role === "admin";
 
 export const validateRegisterBody = (req: Request, res: Response, next: NextFunction) => {
     const validatedBody = RegisterSchema.safeParse(req.body)
@@ -61,8 +65,12 @@ export const verifyUserToken = async (
     if (!payload.sub || typeof payload.sub !== "string") {
       throw new AppError("Invalid token payload", 401);
     }
+    if (!isUserRole(payload.role)) {
+      throw new AppError("Invalid token payload", 401);
+    }
 
     req.userId = payload.sub;
+    req.userRole = payload.role;
 
     next();
   } catch (error) {
@@ -73,4 +81,18 @@ export const verifyUserToken = async (
     
     return next(new AppError("Unverified or Expired Token", 401));
   }
+};
+
+
+
+export const authorizeRoles = (...roles: UserRole[]) => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    if (!req.userRole || !roles.includes(req.userRole)) {
+      return res.status(403).json({
+        message: "You do not have permission to perform this action",
+      });
+    }
+
+    next();
+  };
 };

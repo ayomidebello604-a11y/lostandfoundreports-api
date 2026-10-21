@@ -2,8 +2,10 @@ import { AppError } from "../errors/AppError.ts";
 import { fetchAllReports, fetchFoundReports, fetchLostReports, fetchReportById, fetchReportsByItemName, getPaginatedReports, postReport, putReport, removeReport } from "../repositories/lostfound.repositories.ts";
 import type { NewReportInput } from "../types/reports.types.ts";
 
-export const createReportService = async (input: NewReportInput) => {
-    const response = await postReport(input)
+
+
+export const createReportService = async (userId:string,input: NewReportInput) => {
+    const response = await postReport(userId,input)
     if (!response) {
         throw new AppError("Response Not Found",404)
     }
@@ -22,21 +24,27 @@ export const getReportByIdService = async (id: number) => {
     return response
 }
 
- export const updateReportService = async(input: NewReportInput, id: number) => {
-    const response = await putReport(input, id)
+ export const updateReportService = async(input: NewReportInput, id: number,userId:string) => {
+    const response = await putReport(input, id,userId)
     if (!response) {
         throw new AppError("Unable to find the requested reports to be updated", 404)
     }
     return response
 }
 
-export const deleteReportService = async (id: number) => {
-    const response = await removeReport(id);
-    if (!response) {
-        throw new AppError("Unable to find the report with the provided id",404)
-    }
-    return response
-}
+export const deleteReportService = async (
+  id: number,
+  userId: string,
+  userRole: "student" | "admin",
+) => {
+  const response = await removeReport(id, userId, userRole);
+
+  if (!response) {
+    throw new AppError("Unable to find the report with the provided id", 404);
+  }
+
+  return response;
+};
 export const getLostReportsService = async () => {
     const response = await fetchLostReports()
     return response

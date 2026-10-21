@@ -6,8 +6,11 @@ type paginatedReportsdata = {
     totalReports: number,
     totalPages:number
 }
+interface ReportWithUserid extends Report {
+  user_id: string
+}
 
- export const postReport = async (input: NewReportInput): Promise<Report | null> => {
+ export const postReport = async (userId:string,input: NewReportInput): Promise<ReportWithUserid | null> => {
     const {
       student_id,
       item_name,
@@ -18,9 +21,9 @@ type paginatedReportsdata = {
       contact_details,
     } = input
 
-    const text = "INSERT INTO lost_found_reports(student_id,item_name,description,type,category,location,contact_details) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING *"
-    const value = [student_id, item_name, description, type, category, location, contact_details ?? null]
-    const NewTable = await pool.query<Report>(text, value)
+    const text = "INSERT INTO lost_found_reports(user_id,student_id,item_name,description,type,category,location,contact_details) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *"
+    const value = [userId,student_id, item_name, description, type, category, location, contact_details ?? null]
+    const NewTable = await pool.query<ReportWithUserid>(text, value)
      return NewTable.rows[0] ?? null;
     }
 
@@ -36,7 +39,7 @@ export const fetchReportById = async (id: number): Promise<Report | null> => {
     return foundReport.rows[0] ?? null
 }
 
-export const putReport = async (input: NewReportInput,id:number ): Promise<Report | null> => {
+export const putReport = async (input: NewReportInput,id:number,userId:string ): Promise<Report | null> => {
     const {
       student_id,
       item_name,
@@ -46,18 +49,28 @@ export const putReport = async (input: NewReportInput,id:number ): Promise<Repor
       location,
       contact_details,
     } = input;
-    const text = "UPDATE lost_found_reports SET student_id=$1, item_name=$2, description=$3, type=$4, category=$5, location=$6,contact_details=$7 WHERE id=$8 RETURNING *"
-    const value = [student_id,item_name,description,type,category,location,contact_details, id]
+    const text = "UPDATE lost_found_reports SET student_id=$1, item_name=$2, description=$3, type=$4, category=$5, location=$6,contact_details=$7 WHERE id=$8 AND user_id=$9 RETURNING *"
+    const value = [student_id,item_name,description,type,category,location,contact_details, id,userId]
     const updatedTable = await pool.query<Report>(text, value)
     return updatedTable.rows[0] ?? null
 } 
 
-export const removeReport = async (id: number): Promise<Report | null> => {
-    const text = "DELETE FROM lost_found_reports WHERE id=$1 RETURNING *"
-    const value = [id]
-    const response = await pool.query<Report>(text, value)
-    return response.rows[0] ?? null
-}
+export const removeReport = async (
+  id: number,
+  userId: string,
+  userRole: "student" | "admin",
+): Promise<Report | null> => {
+  const text =
+    userRole === "admin"
+      ? "DELETE FROM lost_found_reports WHERE id=$1 RETURNING *"
+      : "DELETE FROM lost_found_reports WHERE id=$1 AND user_id=$2 RETURNING *";
+
+  const value = userRole === "admin" ? [id] : [id, userId];
+
+  const response = await pool.query<Report>(text, value);
+
+  return response.rows[0] ?? null;
+};
 
 export const fetchLostReports = async (): Promise<reports> => {
     const text = "SELECT * FROM lost_found_reports WHERE type='lost' ORDER BY id ASC" 

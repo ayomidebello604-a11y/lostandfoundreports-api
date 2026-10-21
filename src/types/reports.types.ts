@@ -2,7 +2,7 @@ type reportType = "lost" | "found"
  type itemStatus = "open" | "claimed" | "returned" | "closed"
 
 export interface Report{
-    id: number
+  id: number,
     student_id: string,
     item_name: string,
     description: string,

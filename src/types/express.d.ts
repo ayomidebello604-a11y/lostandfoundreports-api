@@ -1,3 +1,4 @@
+import type { UserRole } from "../middleware/auth.validation.ts";
 import type { LoginInput, RegisterInput } from "../schema/auth.schema.ts";
 import type { newReportInput,newMovieInput,newTicketIdInput, queryType } from "../schema/lostandfound.schema.ts";
 
@@ -53,7 +54,8 @@ declare global {
 declare global {
   namespace Express {
     interface Request {
-    userId: string
+      userId: string
+      userRole: UserRole
     }
   }
 }

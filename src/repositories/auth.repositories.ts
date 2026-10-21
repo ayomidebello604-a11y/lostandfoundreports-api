@@ -5,6 +5,7 @@ export type dbRegister = Omit<RegisterInput, "password"> & {
 }
 export interface dbLogin extends dbRegister {
     id: string
+    role: "student" | "admin"
 }
 type users = safeRegister[]
 type safeRegister = Omit<dbRegister, "password_hash"> 

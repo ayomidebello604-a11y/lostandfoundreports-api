@@ -32,7 +32,7 @@ export const verifyUserService = async (input: LoginInput) => {
     if (!isPasswordValid) {
         throw new AppError("invalid email or Password",401)
     }
-    const Token = await generateToken(user.id)
+    const Token = await generateToken(user.role,user.id)
     const userDetails = {
         user_id: user.id,
        email: user.email,
