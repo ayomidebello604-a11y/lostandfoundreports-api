@@ -1,5 +1,5 @@
 import type {Request,Response, NextFunction } from "express";
-import { getAllUsersService, registerUserService, verifyUserService } from "../services/auth.services.ts";
+import { getAllUsersService, registerUserService, verifyTokenService, verifyUserService } from "../services/auth.services.ts";
 import { AppError } from "../errors/AppError.ts";
 
 
@@ -43,6 +43,25 @@ export const loginUser = async (req: Request, res: Response, next: NextFunction)
             user
         })
     } catch (error) {
+        next(error)
+    }
+}
+export const refreshToken = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const { refreshToken } = req.body
+
+        
+        if (typeof refreshToken !== "string" || !refreshToken.trim()) {
+          throw new AppError("Refresh token is required", 400);
+        }
+        
+        const rotatedtokens = await verifyTokenService(refreshToken)
+
+        res.status(200).json({
+            message: "Token successfully rotated",
+            newTokens: rotatedtokens
+        })
+ } catch (error) {
         next(error)
     }
 }
