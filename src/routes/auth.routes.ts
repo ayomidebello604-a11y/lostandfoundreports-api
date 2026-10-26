@@ -10,7 +10,7 @@ const router = Router()
 router.get("/",verifyUserToken,getAllUsers)
 router.post("/register", validateRegisterBody, registerUser);
 router.post("/login", validateLoginBody, loginUser)
-router.post("/refreshToken", refreshToken)
+router.post("/refresh", refreshToken)
 router.post("/logout",lougoutUser)
 
 
