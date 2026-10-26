@@ -48,7 +48,7 @@ export const verifyUserService = async (input: LoginInput) => {
         user_id: user.id,
        email: user.email,
         name: user.name,
-        Token: Token,
+        accessToken: Token,
         refreshToken: refreshToken,
        expires_at: expires_at
     };
@@ -56,7 +56,10 @@ export const verifyUserService = async (input: LoginInput) => {
     
 };
 
-//For new AccessToken Creation and RefreshToken Creation
+
+
+//For new AccessToken Creation and RefreshToken Rotation
+
 export const verifyTokenService = async (refreshToken: string) => {
     const token_hash = createHash("sha256").update(refreshToken).digest("hex")
     const token_info =  await searchToken(token_hash)
@@ -82,4 +85,13 @@ export const verifyTokenService = async (refreshToken: string) => {
     };
     return session_info
     
+}
+
+export const logoutService = async (refreshToken: string) => {
+    const hashed_token = createHash("sha256").update(refreshToken).digest("hex")
+    const isLogout = await revokeRefreshToken(hashed_token)
+    if (!isLogout) {
+        throw new AppError("Unable to Logout User",401)
+    }
+    return isLogout
 }

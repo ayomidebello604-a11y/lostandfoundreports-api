@@ -14,7 +14,7 @@ export const generateToken = async (role:userRole,userId: string): Promise<strin
       .setProtectedHeader({ alg: "HS256" })
       .setSubject(userId)
       .setIssuedAt()
-      .setExpirationTime("20m")
+      .setExpirationTime("10m")
         .sign(secret);
     
     return token

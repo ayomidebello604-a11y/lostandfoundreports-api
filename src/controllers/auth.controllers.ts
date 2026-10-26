@@ -1,5 +1,5 @@
 import type {Request,Response, NextFunction } from "express";
-import { getAllUsersService, registerUserService, verifyTokenService, verifyUserService } from "../services/auth.services.ts";
+import { getAllUsersService, logoutService, registerUserService, verifyTokenService, verifyUserService } from "../services/auth.services.ts";
 import { AppError } from "../errors/AppError.ts";
 
 
@@ -64,4 +64,20 @@ export const refreshToken = async (req: Request, res: Response, next: NextFuncti
  } catch (error) {
         next(error)
     }
+}
+
+export const lougoutUser = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const { refreshToken } = req.body
+        if (typeof refreshToken !== "string" || !refreshToken.trim()) {
+            throw new AppError("Refresh token is required", 400);
+        }
+        const isLogout = await logoutService(refreshToken);
+        res.status(200).json({
+            Message: "User Logged out",
+            status: isLogout
+        })
+    } catch (error) {
+        next(error)
+    }   
 }

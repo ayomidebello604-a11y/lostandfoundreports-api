@@ -42,6 +42,7 @@ export const findUserByEmail = async (email: string) : Promise<dbLogin | null> =
     const user = await pool.query<dbLogin>(text, value)
     return user.rows[0] ?? null
 }
+
 export const findUserById = async (id: string): Promise<dbLogin | null> => {
     const text = "SELECT role FROM users WHERE id=$1"
     const value = [id]
@@ -108,10 +109,11 @@ export const searchToken = async ( token_hash: string): Promise<token | null> =>
   const token_info = await pool.query<token>(text, value);
   return token_info.rows[0] ?? null;
 };
-export const revokeRefreshToken = async (token_hash: string) => {
+export const revokeRefreshToken = async (token_hash: string): Promise<boolean> => {
   const text =
-    "UPDATE refresh_tokens SET revoked_at = NOW() WHERE token_hash = $1";
-  await pool.query(text, [token_hash]);
+    "UPDATE refresh_tokens SET revoked_at = NOW() WHERE token_hash = $1 AND revoked_at IS NULL";
+ const result = await pool.query(text, [token_hash]);
+return (result.rowCount ?? 0) > 0; //Return true if a row count was changed otherwise return false
 };
 
  export const create_Session = async (user_id: string, session_id: string, hashed_refeshToken: string, expires_at: Date): Promise<session | null> =>  {

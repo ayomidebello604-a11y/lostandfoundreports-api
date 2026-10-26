@@ -1,7 +1,6 @@
 import { type Request, type Response, type NextFunction } from "express";
 import * as z from "zod";
 import { jwtVerify } from "jose";
-import { generateToken } from "../utils/jwt.ts";
 import { LoginSchema, RegisterSchema } from "../schema/auth.schema.ts";
 import { AppError } from "../errors/AppError.ts";
  
