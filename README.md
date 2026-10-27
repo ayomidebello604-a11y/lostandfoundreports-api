@@ -22,7 +22,7 @@ This API supports:
 - PostgreSQL
 - Zod
 - JWT via `jose`
-- bcrypt-based password hashing
+- Argon2id-based password hashing
 
 ## Requirements
 

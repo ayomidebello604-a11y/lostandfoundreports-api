@@ -1,7 +1,7 @@
 import { randomBytes,createHash,randomUUID} from "node:crypto";
 import { AppError } from "../errors/AppError.ts";
 import { hashPassword, verifyPassword } from "../password.ts";
-import { create_Session,RotateRefreshToken ,createUser, fetchAllUsers, findUserByEmail, findUserById, revokeRefreshToken, searchToken, type dbRegister } from "../repositories/auth.repositories.ts";
+import { create_Session,RotateRefreshToken ,createUser, fetchAllUsers, findUserByEmail, findUserById, revokeRefreshToken, searchToken } from "../repositories/auth.repositories.ts";
 import type { LoginInput, RegisterInput } from "../schema/auth.schema.ts";
 import { generateToken } from "../utils/jwt.ts";
 
@@ -84,7 +84,6 @@ export const verifyTokenService = async (refreshToken: string) => {
         expiresAt: expires_at
     };
     return session_info
-    
 }
 
 export const logoutService = async (refreshToken: string) => {
