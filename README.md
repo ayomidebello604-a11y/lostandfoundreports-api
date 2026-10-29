@@ -1,442 +1,459 @@
-﻿# Lost and Found Reports API
+# 🏛️ Lost & Found Reports API
 
-A REST API for registering users, authenticating with JWT, and managing lost and found item reports. This project is built with Express 5, TypeScript, PostgreSQL, Zod validation, and secure token-based authentication.
+[![Node.js Version](https://img.shields.io/badge/Node.js-v24%2B-339933?logo=node.js)](https://nodejs.org)
+[![Express](https://img.shields.io/badge/Express-v5.x-000000?logo=express)](https://expressjs.com)
+[![TypeScript](https://img.shields.io/badge/TypeScript-v5%2B-3178C6?logo=typescript)](https://www.typescriptlang.org)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15%2B-4169E1?logo=postgresql)](https://www.postgresql.org)
+[![OpenAPI](https://img.shields.io/badge/OpenAPI-3.0.3-6BA539?logo=openapi-initiative)](https://swagger.io/specification/)
+[![Tested with Vitest](https://img.shields.io/badge/Tested%20with-Vitest-6E9F18?logo=vitest)](https://vitest.dev)
+[![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](https://opensource.org/licenses/ISC)
 
-## Overview
+A production-grade, secure RESTful API engineered for institutional lost-and-found operations. Built with **Express 5**, **TypeScript**, **PostgreSQL**, and **Zod**, featuring enterprise authentication with rotating refresh tokens, granular Role-Based Access Control (RBAC), strict row-level authorization, and comprehensive **OpenAPI 3.0 / Swagger UI** documentation.
 
-This API supports:
+---
 
-- User registration and login
-- Access-token authentication with refresh-token rotation
-- Secure logout using a refresh token
-- CRUD operations for lost and found reports
-- Search and pagination for report listings
-- Role-based access control for admin-only actions
-- Validation and structured error handling
+## 📑 Table of Contents
 
-## Tech stack
+- [Key Architecture & Security Features](#-key-architecture--security-features)
+- [System Architecture & Auth Flow](#-system-architecture--auth-flow)
+- [Interactive API Documentation (Swagger UI)](#-interactive-api-documentation-swagger-ui)
+- [Project Directory Structure](#-project-directory-structure)
+- [Prerequisites & Requirements](#-prerequisites--requirements)
+- [Environment Configuration](#-environment-configuration)
+- [Database Schema & Migrations](#-database-schema--migrations)
+- [Getting Started](#-getting-started)
+- [API Reference](#-api-reference)
+  - [Authentication & Session Endpoints (`/api/user`)](#authentication--session-endpoints-apiuser)
+  - [Reports Management Endpoints (`/api/reports`)](#reports-management-endpoints-apireports)
+- [Error Handling Strategy](#-error-handling-strategy)
+- [Testing Suite](#-testing-suite)
+- [License](#-license)
 
-- Node.js 18+
-- Express 5
-- TypeScript
-- PostgreSQL
-- Zod
-- JWT via `jose`
-- Argon2id-based password hashing
+---
 
-## Requirements
+## 🛡️ Key Architecture & Security Features
 
-- Node.js 18 or later
-- npm
-- PostgreSQL database instance
+- **Double-Token Authentication Architecture**: Short-lived access JWTs paired with long-lived (48-hour) cryptographically random refresh tokens.
+- **Atomic Refresh Token Rotation (RTR)**: Every refresh operation is wrapped inside a PostgreSQL ACID transaction using pessimistic locking (`SELECT ... FOR UPDATE`), immediately revoking the predecessor to defend against replay and concurrency attacks.
+- **Hashed Token Storage**: Refresh tokens are never persisted in plaintext; SHA-256 digests are stored and compared, ensuring session safety even during database compromises.
+- **Modern Cryptography**: Password storage powered by **Argon2id**, the winner of the Password Hashing Competition (PHC).
+- **Two-Tier Authorization (RBAC + Ownership)**: Route middleware validates roles (`student`, `admin`), while repository queries enforce row-level ownership (`WHERE user_id = $n`) for mutative actions by students.
+- **End-to-End Type Safety & Runtime Validation**: Validated via strict **Zod** schemas at request boundaries before reaching controllers.
+- **Interactive OpenAPI 3.0 Documentation**: Integrated Swagger UI documentation mounted at `/api-docs` generated dynamically from JSDoc specifications.
+- **Fail-Fast Error Handling**: Structured, standardized error contracts using a custom `AppError` domain model.
 
-## Project setup
+---
 
-1. Clone the repository:
+## 🔄 System Architecture & Auth Flow
 
-   ```bash
-   git clone https://github.com/ayomidebello604-a11y/lostandfoundreports-api.git
-   cd lostandfoundreports-api
-   ```
-
-2. Install dependencies:
-
-   ```bash
-   npm install
-   ```
-
-3. Create a `.env` file in the project root:
-
-   ```dotenv
-   JWT_SECRET=your_super_secret_key
-   DB_HOST=localhost
-   DB_PORT=5432
-   DB_USER=postgres
-   DB_PASSWORD=your_password
-   DB_NAME=lostandfound
-   ```
-
-   Keep the file private and never commit it to version control.
-
-4. Create the PostgreSQL tables used by the app:
-
-   ```sql
-   CREATE TABLE users (
-     id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-     name VARCHAR(30) NOT NULL,
-     email VARCHAR(255) NOT NULL UNIQUE,
-     password_hash TEXT NOT NULL,
-     role VARCHAR(10) NOT NULL DEFAULT 'student'
-       CHECK (role IN ('student', 'admin'))
-   );
-
-   CREATE TABLE refresh_tokens (
-     user_id INTEGER NOT NULL REFERENCES users(id),
-     session_id UUID NOT NULL,
-     token_hash TEXT NOT NULL,
-     expires_at TIMESTAMPTZ NOT NULL,
-     revoked_at TIMESTAMPTZ
-   );
-
-   CREATE TABLE lost_found_reports (
-     id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-     user_id INTEGER NOT NULL REFERENCES users(id),
-     student_id VARCHAR(20) NOT NULL,
-     item_name VARCHAR(150) NOT NULL,
-     description TEXT NOT NULL,
-     type VARCHAR(5) NOT NULL CHECK (type IN ('lost', 'found')),
-     category VARCHAR(50) NOT NULL,
-     location VARCHAR(150) NOT NULL,
-     status VARCHAR(10) NOT NULL DEFAULT 'open'
-       CHECK (status IN ('open', 'claimed', 'returned', 'closed')),
-     contact_details VARCHAR(150)
-   );
-   ```
-
-5. Start the server in development mode:
-
-   ```bash
-   npm run dev
-   ```
-
-   The API runs at `http://localhost:3000`.
-
-6. Build and run in production mode:
-
-   ```bash
-   npm run build
-   npm start
-   ```
-
-## Authentication API
-
-All authentication routes are mounted under `/api/user`.
-
-| Method | Route | Description |
-| --- | --- | --- |
-| `GET` | `/api/user` | Retrieve all users. Requires a valid access token. |
-| `POST` | `/api/user/register` | Register a new user account. |
-| `POST` | `/api/user/login` | Sign in and receive access and refresh tokens. |
-| `POST` | `/api/user/refreshToken` | Rotate a refresh token and receive a new access token. |
-| `POST` | `/api/user/logout` | Revoke a refresh token and log the user out. |
-
-### Access token usage
-
-After login, include the access token in the `Authorization` header for protected routes:
-
-```http
-Authorization: Bearer <accessToken>
+```
+[ Client ] 
+   │
+   ├── (1) POST /api/user/login ───────────► [ Argon2 Verification ]
+   │                                                    │
+   ◄── (2) Returns Access JWT + Plain Refresh Token ────┘
+   │
+   ├── (3) Protected Request (Bearer JWT) ──► [ verifyUserToken Middleware ]
+   │                                                    │
+   │                                          (Validates Signature & Expiry)
+   │                                                    ▼
+   │                                          [ Controller / Repository ]
+   │
+   └── (4) POST /api/user/refresh ────────► [ ACID Transaction: BEGIN ]
+                                                        │
+                                            (Pessimistic Lock: FOR UPDATE)
+                                            (Revoke Old Token: revoked_at=NOW())
+                                            (Mint & Insert New SHA-256 Hash)
+                                                        ▼
+   ◄── (5) Returns New AT + Rotated RT ──── [ COMMIT ]
 ```
 
-## Authorization flow
+---
 
-The API uses a two-step authorization flow for protected resources:
+## 📖 Interactive API Documentation (Swagger UI)
 
-1. The client sends a JWT in the `Authorization: Bearer <accessToken>` header.
-2. The `verifyUserToken` middleware validates the token using the `JWT_SECRET` value from the environment.
-3. If the token is valid, the middleware reads the user ID and role from the JWT payload and attaches them to the request (`req.userId`, `req.userRole`).
-4. Protected routes such as `/api/reports` continue to the controller logic only after authentication succeeds.
-5. Role-restricted endpoints use `authorizeRoles(...)` to allow or deny access based on the user's role.
+This API includes integrated OpenAPI 3.0.3 documentation rendered with **Swagger UI**.
 
-### Middleware behavior
+- **Swagger UI Dashboard**: `http://localhost:3000/api-docs`
+- **Config & Schemas**: Located in [`src/config/swagger.ts`](src/config/swagger.ts), [`src/docs/auth.docs.ts`](src/docs/auth.docs.ts), and [`src/docs/reports.docs.ts`](src/docs/reports.docs.ts).
+- Explore endpoints, review request/response schemas, inspect status codes, and test authenticated requests directly via the interactive UI using Bearer JWT authorization.
 
-- Missing or malformed `Authorization` header -> `401 Unauthorized`
-- Expired, invalid, or tampered JWT -> `401 Unauthorized`
-- Valid token but insufficient role for the route -> `403 Forbidden`
-- Valid token and valid role -> request proceeds normally
+---
 
-### Example protected request
+## 📂 Project Directory Structure
 
-```http
-GET /api/reports
-Authorization: Bearer <accessToken>
+```
+lostandfound-api/
+├── src/
+│   ├── config/                 # Swagger JSDoc & OpenAPI specification options
+│   │   └── swagger.ts
+│   ├── controllers/            # HTTP request orchestrators & response handlers
+│   │   ├── auth.controllers.ts
+│   │   └── lostfound.controller.ts
+│   ├── db/                     # PostgreSQL pg.Pool lifecycle management
+│   │   └── index.ts
+│   ├── docs/                   # OpenAPI / Swagger JSDoc annotations
+│   │   ├── auth.docs.ts
+│   │   └── reports.docs.ts
+│   ├── errors/                 # Centralized AppError abstractions
+│   │   └── AppError.ts
+│   ├── middleware/             # Validation and JWT/RBAC security guards
+│   │   ├── auth.validation.ts
+│   │   └── lostfound.validation.ts
+│   ├── repositories/           # PostgreSQL data-access layer & transactional queries
+│   │   ├── auth.repositories.ts
+│   │   └── lostfound.repositories.ts
+│   ├── routes/                 # Express route definitions
+│   │   ├── auth.routes.ts
+│   │   └── lostfound.routes.ts
+│   ├── schema/                 # Zod runtime schemas & inference types
+│   │   ├── auth.schema.ts
+│   │   └── lostandfound.schema.ts
+│   ├── services/               # Core business logic & domain rules
+│   │   ├── auth.services.ts
+│   │   └── lostfound.services.ts
+│   ├── tests/                  # Unit and integration test suites
+│   │   ├── auth.services.test.ts
+│   │   └── app.test.ts
+│   ├── types/                  # Ambient and TypeScript contract definitions
+│   │   ├── express.d.ts
+│   │   ├── lostfoundvalidation.types.ts
+│   │   └── reports.types.ts
+│   ├── utils/                  # Cryptography, JWT (jose), and utility helpers
+│   │   └── jwt.ts
+│   ├── app.ts                  # Express application setup & middleware assembly
+│   ├── password.ts             # Argon2 password hashing routines
+│   └── server.ts               # HTTP server bootstrap & port binding
+├── package.json
+├── tsconfig.json
+└── README.md
 ```
 
-This route is protected by `verifyUserToken`, which ensures the caller is authenticated before the report controller runs.
+---
 
-For admin-only actions:
+## ⚙️ Prerequisites & Requirements
 
-```http
-DELETE /api/reports/42
-Authorization: Bearer <adminAccessToken>
+- **Node.js**: `v24.0.0` or higher (ESM native)
+- **PostgreSQL**: `v15.0` or higher
+- **Package Manager**: `npm`
+
+---
+
+## 🔐 Environment Configuration
+
+Create a `.env` file in the root directory:
+
+```ini
+# Application Secrets
+JWT_SECRET=your_super_strong_jwt_signing_secret_min_32_chars
+
+# Database Credentials
+DB_HOST=127.0.0.1
+DB_PORT=5432
+DB_USER=postgres
+DB_PASSWORD=your_secure_database_password
+DB_NAME=lostandfound
 ```
 
-This route uses `authorizeRoles("admin")` in addition to token verification. A non-admin user receives a `403 Forbidden` response.
+| Variable | Description | Required | Example |
+| :--- | :--- | :---: | :--- |
+| `JWT_SECRET` | Secret key used to sign and verify HMAC HS256 tokens | Yes | `c47f9...` |
+| `DB_HOST` | Hostname/IP address of the PostgreSQL server | Yes | `127.0.0.1` |
+| `DB_PORT` | Port exposed by PostgreSQL | Yes | `5432` |
+| `DB_USER` | PostgreSQL user account | Yes | `postgres` |
+| `DB_PASSWORD`| PostgreSQL password | Yes | `secret123` |
+| `DB_NAME` | Target database catalog | Yes | `lostandfound` |
 
-### Register a user
+---
 
+## 🗄️ Database Schema & Migrations
+
+Execute the following DDL statements to provision your schema:
+
+```sql
+-- 1. Users Table
+CREATE TABLE users (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name VARCHAR(30) NOT NULL,
+  email VARCHAR(255) NOT NULL UNIQUE,
+  password_hash TEXT NOT NULL,
+  role VARCHAR(10) NOT NULL DEFAULT 'student' CHECK (role IN ('student', 'admin')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 2. Rotating Refresh Tokens Table
+CREATE TABLE refresh_tokens (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  session_id UUID NOT NULL,
+  token_hash TEXT NOT NULL UNIQUE,
+  expires_at TIMESTAMPTZ NOT NULL,
+  revoked_at TIMESTAMPTZ DEFAULT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_refresh_tokens_hash ON refresh_tokens (token_hash);
+
+-- 3. Lost & Found Reports Table
+CREATE TABLE lost_found_reports (
+  id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  student_id VARCHAR(20) NOT NULL,
+  item_name VARCHAR(150) NOT NULL,
+  description TEXT NOT NULL,
+  type VARCHAR(5) NOT NULL CHECK (type IN ('lost', 'found')),
+  category VARCHAR(50) NOT NULL,
+  location VARCHAR(150) NOT NULL,
+  status VARCHAR(10) NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'claimed', 'returned', 'closed')),
+  contact_details VARCHAR(150)
+);
+
+CREATE INDEX idx_reports_item_name ON lost_found_reports (item_name);
+```
+
+---
+
+## 🚀 Getting Started
+
+### 1. Installation
+```bash
+git clone https://github.com/ayomidebello604-a11y/lostandfoundreports-api.git
+cd lostandfoundreports-api
+npm install
+```
+
+### 2. Development Mode
+Launches the server with live file watching via `tsx watch`:
+```bash
+npm run dev
+```
+The server will start at `http://localhost:3000`.  
+Swagger UI is available at `http://localhost:3000/api-docs`.
+
+### 3. Production Build & Execution
+Compiles TypeScript via `tsc` and runs the compiled bundle:
+```bash
+npm run build
+npm start
+```
+
+---
+
+## 📡 API Reference
+
+### Authentication & Session Endpoints (`/api/user`)
+
+| Method | Endpoint | Auth | Description |
+| :--- | :--- | :---: | :--- |
+| `POST` | `/api/user/register` | None | Register a student account |
+| `POST` | `/api/user/login` | None | Authenticate credentials and receive token pair |
+| `POST` | `/api/user/refresh` | None | Rotate refresh token and obtain fresh access token |
+| `POST` | `/api/user/logout` | None | Revoke the active refresh token session |
+| `GET` | `/api/user` | Bearer | Retrieve catalog of registered users |
+
+<details>
+<summary><strong>View Auth Payloads & Responses</strong></summary>
+
+#### Register User
 `POST /api/user/register`
-
-Request body:
-
 ```json
+// Request
 {
-  "name": "Jane Doe",
-  "email": "jane@example.com",
-  "password": "strongPassword123"
+  "name": "Alex Mercer",
+  "email": "alex@university.edu",
+  "password": "SecurePassword123!"
 }
-```
 
-Successful response:
-
-```json
+// Response (201 Created)
 {
   "message": "User Created",
   "user": {
-    "id": 1,
-    "name": "Jane Doe",
-    "email": "jane@example.com"
+    "name": "Alex Mercer",
+    "email": "alex@university.edu"
   }
 }
 ```
 
-### Login
-
+#### Login
 `POST /api/user/login`
-
-Request body:
-
 ```json
+// Request
 {
-  "email": "jane@example.com",
-  "password": "strongPassword123"
+  "email": "alex@university.edu",
+  "password": "SecurePassword123!"
 }
-```
 
-Successful response:
-
-```json
+// Response (200 OK)
 {
   "message": "User Authenticated",
   "user": {
-    "user_id": 1,
-    "email": "jane@example.com",
-    "name": "Jane Doe",
-    "accessToken": "<jwt-access-token>",
-    "refreshToken": "<refresh-token>",
-    "expires_at": "2026-10-27T10:15:00.000Z"
+    "user_id": "07ee00cf-f485-4e01-8e1c-67c955f46ff8",
+    "email": "alex@university.edu",
+    "name": "Alex Mercer",
+    "accessToken": "eyJhbGciOiJIUzI1NiIsIn...",
+    "refreshToken": "7c9e012d...",
+    "expires_at": "2026-10-30T15:00:00.000Z"
   }
 }
 ```
 
-Notes:
-
-- Access tokens are short-lived.
-- Refresh tokens are long-lived and rotated each time they are used.
-- Refresh tokens are stored as a hashed value for security.
-
-### Refresh token rotation
-
-`POST /api/user/refreshToken`
-
-Request body:
-
+#### Token Rotation
+`POST /api/user/refresh`
 ```json
+// Request
 {
-  "refreshToken": "<refresh-token>"
+  "refreshToken": "7c9e012d..."
 }
-```
 
-Successful response:
-
-```json
+// Response (200 OK)
 {
   "message": "Token successfully rotated",
   "newTokens": {
-    "sessionId": "d1f6e1f0-0d52-49b1-9a4d-a3a75b4d8ef3",
-    "new_accessToken": "<new-access-token>",
-    "refreshToken": "<new-refresh-token>",
-    "expiresAt": "2026-10-27T10:15:00.000Z"
+    "sessionId": "4f183785-5b4d-457c-86bc-5ca3b811776f",
+    "new_accessToken": "eyJhbGciOiJIUzI1NiIsIn...",
+    "refreshToken": "9d1b02...",
+    "expiresAt": "2026-10-30T15:00:00.000Z"
   }
 }
 ```
 
-This endpoint verifies the submitted refresh token, rotates it, and revokes the previous one.
-
-### Logout
-
+#### Logout
 `POST /api/user/logout`
-
-Request body:
-
 ```json
+// Request
 {
-  "refreshToken": "<refresh-token>"
+  "refreshToken": "7c9e012d..."
 }
-```
 
-Successful response:
-
-```json
+// Response (200 OK)
 {
   "Message": "User Logged out",
   "status": true
 }
 ```
 
-## Reports API
+#### Get All Users
+`GET /api/user`
+```json
+// Response (200 OK)
+{
+  "message": "All Users",
+  "users": [
+    {
+      "id": "07ee00cf-f485-4e01-8e1c-67c955f46ff8",
+      "name": "Alex Mercer",
+      "email": "alex@university.edu"
+    }
+  ]
+}
+```
+</details>
 
-Report routes are mounted under `/api/reports` and require a valid access token.
+---
 
-| Method | Route | Description |
-| --- | --- | --- |
-| `POST` | `/api/reports` | Create a report |
-| `GET` | `/api/reports` | Retrieve all reports |
-| `GET` | `/api/reports/lost` | Retrieve lost-item reports |
-| `GET` | `/api/reports/found` | Retrieve found-item reports |
-| `GET` | `/api/reports/search?searchName=...` | Search report items by name |
-| `GET` | `/api/reports/paginated?page=1&limit=10` | Retrieve paginated results |
-| `GET` | `/api/reports/:id` | Fetch a report by ID |
-| `PUT` | `/api/reports/:id` | Update an existing report |
-| `DELETE` | `/api/reports/:id` | Delete a report. Restricted to admins. |
+### Reports Management Endpoints (`/api/reports`)
 
-### Create a report
+> 🔒 **All report endpoints require a Bearer Access Token**:  
+> `Authorization: Bearer <accessToken>`
 
+| Method | Endpoint | Roles | Description |
+| :--- | :--- | :---: | :--- |
+| `POST` | `/api/reports` | `student`, `admin` | File a new lost/found report |
+| `GET` | `/api/reports` | `student`, `admin` | Fetch all reports (ascending order) |
+| `GET` | `/api/reports/lost` | `student`, `admin` | Filter reports where `type = 'lost'` |
+| `GET` | `/api/reports/found` | `student`, `admin` | Filter reports where `type = 'found'` |
+| `GET` | `/api/reports/search` | `student`, `admin` | Case-insensitive substring search (`?searchName=...`) |
+| `GET` | `/api/reports/paginated` | `student`, `admin` | Paginated listings (`?page=1&limit=10`) |
+| `GET` | `/api/reports/:id` | `student`, `admin` | Retrieve a specific report by ID |
+| `PUT` | `/api/reports/:id` | `student`, `admin` | Update a report (Owner only) |
+| `DELETE` | `/api/reports/:id` | `student`, `admin` | Delete report (Student = own only; Admin = any) |
+
+<details>
+<summary><strong>View Report Payloads & Examples</strong></summary>
+
+#### Create Report
 `POST /api/reports`
-
-Request body:
-
 ```json
+// Request
 {
-  "student_id": "STU-123",
-  "item_name": "Blue backpack",
-  "description": "A blue backpack left near the library entrance.",
+  "student_id": "STU-8821",
+  "item_name": "Calculus Textbook (Stewart 9th Ed.)",
+  "description": "Hardcover book with blue markings left on bench 4.",
   "type": "lost",
-  "category": "Bags",
-  "location": "Library",
-  "contact_details": "student@example.com"
+  "category": "Books",
+  "location": "Science Quad",
+  "contact_details": "alex@university.edu"
+}
+
+// Response (201 Created)
+{
+  "id": 42,
+  "user_id": "07ee00cf-f485-4e01-8e1c-67c955f46ff8",
+  "student_id": "STU-8821",
+  "item_name": "Calculus Textbook (Stewart 9th Ed.)",
+  "description": "Hardcover book with blue markings left on bench 4.",
+  "type": "lost",
+  "category": "Books",
+  "location": "Science Quad",
+  "status": "open",
+  "contact_details": "alex@university.edu"
 }
 ```
 
-Validation rules:
-
-- `student_id`: required, max 20 characters
-- `item_name`: required, max 150 characters
-- `description`: required and non-empty
-- `type`: must be either `lost` or `found`
-- `category`: required, max 50 characters
-- `location`: required, max 150 characters
-- `contact_details`: optional, max 150 characters
-- `status`: defaults to `open` when created
-- Each report is associated with the authenticated user who created it
-
-### Fetch reports
-
-#### List all reports
-
-```http
-GET /api/reports
+#### Paginated Reports
+`GET /api/reports/paginated?page=1&limit=10`
+```json
+// Response (200 OK)
+{
+  "Message": "Paginated Reports Fetched",
+  "page": 1,
+  "totalPages": 4,
+  "Limit": 10,
+  "TotalReport": 38,
+  "Reports": [ /* Array of Report Objects */ ]
+}
 ```
+</details>
 
-#### Lost reports
+---
 
-```http
-GET /api/reports/lost
-```
+## 🚦 Error Handling Strategy
 
-#### Found reports
-
-```http
-GET /api/reports/found
-```
-
-#### Search by item name
-
-```http
-GET /api/reports/search?searchName=backpack
-```
-
-This searches by case-insensitive partial match of `item_name`.
-
-#### Pagination
-
-```http
-GET /api/reports/paginated?page=1&limit=10
-```
-
-Rules:
-
-- `page` must be at least `1`
-- `limit` must be between `1` and `100`
-- response contains keys such as `Message`, `page`, `totalPages`, `Limit`, `TotalReport`, and `Reports`
-
-### Get a single report
-
-```http
-GET /api/reports/:id
-```
-
-### Update a report
-
-`PUT /api/reports/:id`
-
-Example:
+The API enforces uniform, RFC-compliant JSON error bodies:
 
 ```json
 {
-  "item_name": "Red backpack",
-  "location": "Main hall",
-  "contact_details": "newemail@example.com"
+  "message": "Specific explanation of the failure"
 }
 ```
 
-Only the owner of the report can update it unless a privileged admin action is required.
+| HTTP Status | Context |
+| :--- | :--- |
+| `400 Bad Request` | Zod validation violation, malformed JSON body, or illegal URL parameter |
+| `401 Unauthorized` | Missing token, malformed signature, or expired session |
+| `403 Forbidden` | Authenticated user lacks permission / unauthorized action |
+| `404 Not Found` | Requested report ID does not exist or unmapped route |
+| `500 Internal Error` | Unhandled runtime exception or connection failure |
 
-### Delete a report
+---
 
-`DELETE /api/reports/:id`
+## 🧪 Testing Suite
 
-This action is restricted to users with the `admin` role.
+Testing is built with **Vitest** and **Supertest** across two distinct layers:
 
-## User roles
+```bash
+# Run test suite in watch mode
+npm test
 
-The system supports two roles:
-
-- `student`: default account role
-- `admin`: privileged role used for administrative actions such as deleting reports
-
-To promote a user to admin, update the database entry:
-
-```sql
-UPDATE users SET role = 'admin' WHERE email = 'admin@example.com';
+# Run test suite once (CI / single run)
+npx vitest run src/tests
 ```
 
-## Error handling
+- **Unit Testing (`src/tests/auth.services.test.ts`)**: Tests covering `logoutService` and `verifyTokenService` with repository and JWT mocks.
+- **Integration Testing (`src/tests/app.test.ts`)**: Full-lifecycle HTTP testing through Express routes against live PostgreSQL storage. Includes automatic cleanup hooks ensuring database isolation between test cycles.
 
-The API returns JSON error responses with a `message` field.
+---
 
-Common HTTP responses:
+## 📄 License
 
-- `400 Bad Request`: invalid request payload or malformed JSON
-- `401 Unauthorized`: missing or invalid access token / refresh token
-- `403 Forbidden`: user does not have the required role
-- `404 Not Found`: resource or route not found
-- `500 Internal Server Error`: unexpected server error
-
-Unmatched routes return:
-
-```json
-{
-  "message": "Route Not Found",
-  "requestedURL": "/api/unknown"
-}
-```
-
-## Security notes
-
-- Passwords are hashed before storage.
-- Refresh tokens are hashed and rotated instead of reused.
-- Access tokens are validated before protected routes are accessed.
-- Admin-only routes enforce authorization checks.
-
-## Example workflow
-
-1. Register a user at `POST /api/user/register`.
-2. Log in at `POST /api/user/login` and save the returned `accessToken`.
-3. Use the token on `/api/reports` routes via the `Authorization: Bearer ...` header.
-4. Rotate tokens when needed with `POST /api/user/refreshToken`.
-5. Log out with `POST /api/user/logout` using the refresh token.
-
-## License
-
-This project is for educational and internal API use unless a separate license is added by the repository owner.
+This software is released under the **ISC License**.

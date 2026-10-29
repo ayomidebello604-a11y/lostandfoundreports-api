@@ -1,5 +1,5 @@
 import { pool } from "../db/index.ts";
-import { type RegisterInput, type LoginInput } from "../schema/auth.schema.ts";
+import { type RegisterInput } from "../schema/auth.schema.ts";
 import { AppError } from "../errors/AppError.ts";
 
 export type dbRegister = Omit<RegisterInput, "password"> & {
@@ -122,10 +122,3 @@ return (result.rowCount ?? 0) > 0; //Return true if a row count was changed othe
     const session = await pool.query<session>(text, value)
     return session.rows[0] ?? null
 }
-
-
-
-
-
-
-

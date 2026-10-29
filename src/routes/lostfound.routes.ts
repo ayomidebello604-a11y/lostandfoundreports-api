@@ -31,6 +31,6 @@ router.get("/", getAllReports);
 
 router.get("/:id", getReportById);
 router.put("/:id", updateReport);
-router.delete("/:id", authorizeRoles("admin"),deleteReport);
+router.delete("/:id", authorizeRoles("student","admin"),deleteReport);
 
 export default router;

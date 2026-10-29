@@ -6,12 +6,15 @@ import express, {
 } from "express";
 import lostfoundRouter from "./routes/lostfound.routes.ts";
 import userRouter from "./routes/auth.routes.ts";
+import swaggerSpec from "./config/swagger.ts";
+import swaggerUi from "swagger-ui-express";
 import { AppError } from "./errors/AppError.ts";
 
 const app: Express = express();
 app.use(express.json());
 app.use("/api/reports", lostfoundRouter);
 app.use("/api/user", userRouter);
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 app.use((req: Request, res: Response) => {
   res.status(404).json({
